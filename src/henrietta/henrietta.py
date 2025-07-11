@@ -1,4 +1,5 @@
 import socket
+import time
 
 
 class Henrietta:
@@ -8,6 +9,7 @@ class Henrietta:
         self.socket = None
         self._connected = False
         self.wheels = ["grism", "diffuser", "filter", "slit", "slide", "moving"]
+        self.move_timeout = 30  # seconds
 
     def open(self):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -56,8 +58,15 @@ class Henrietta:
         # Send a command to set the wheel position
         command = f"move_{wheel} {position}\n".encode()
         self.socket.sendall(command)
-        response = self.socket.recv(1024)
-        return self.get_wheels(parse_str=response.decode())
+        self.socket.recv(1024)
+        t = time.time()
+        while self.is_moving:  # Wait until the wheel stops moving
+            if time.time() - t > self.move_timeout:
+                raise TimeoutError(
+                    f"Timeout while moving {wheel} wheel to position {position}."
+                )
+            time.sleep(0.1)
+        return self.get_wheels()
 
     def move_grism(self, position: int):
         return self.move_wheel("grism", position)
